@@ -1,4 +1,5 @@
 {
+  "version": "eosio::abi/1.0",
   "types": [{
       "new_type_name": "my_account_name",
       "type": "name"
@@ -23,7 +24,8 @@
   ],
   "actions": [{
       "name": "message",
-      "type": "message"
+      "type": "message",
+      "ricardian_contract": ""
     }
   ],
   "tables": [{
@@ -39,5 +41,7 @@
       "key_names" : ["user"],
       "key_types" : ["my_account_name"]
     }
-  ]
+  ],
+  "ricardian_clauses": [],
+  "abi_extensions": []
 }

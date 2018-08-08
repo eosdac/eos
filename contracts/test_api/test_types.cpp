@@ -7,7 +7,7 @@
 #include "test_api.hpp"
 
 void test_types::types_size() {
-   
+
    eosio_assert( sizeof(int64_t) == 8, "int64_t size != 8");
    eosio_assert( sizeof(uint64_t) ==  8, "uint64_t size != 8");
    eosio_assert( sizeof(uint32_t) ==  4, "uint32_t size != 4");
@@ -17,14 +17,13 @@ void test_types::types_size() {
    eosio_assert( sizeof(uint8_t) ==  1, "uint8_t size != 1");
 
    eosio_assert( sizeof(account_name) ==  8, "account_name size !=  8");
-   eosio_assert( sizeof(token_name) ==  8, "token_name size !=  8");
    eosio_assert( sizeof(table_name) ==  8, "table_name size !=  8");
    eosio_assert( sizeof(time) ==  4, "time size !=  4");
-   eosio_assert( sizeof(uint256) == 32, "uint256 != 32" );
+   eosio_assert( sizeof(eosio::key256) == 32, "key256 size != 32" );
 }
 
 void test_types::char_to_symbol() {
-   
+
    eosio_assert( eosio::char_to_symbol('1') ==  1, "eosio::char_to_symbol('1') !=  1");
    eosio_assert( eosio::char_to_symbol('2') ==  2, "eosio::char_to_symbol('2') !=  2");
    eosio_assert( eosio::char_to_symbol('3') ==  3, "eosio::char_to_symbol('3') !=  3");
@@ -56,10 +55,10 @@ void test_types::char_to_symbol() {
    eosio_assert( eosio::char_to_symbol('x') == 29, "eosio::char_to_symbol('x') != 29");
    eosio_assert( eosio::char_to_symbol('y') == 30, "eosio::char_to_symbol('y') != 30");
    eosio_assert( eosio::char_to_symbol('z') == 31, "eosio::char_to_symbol('z') != 31");
- 
+
    for(unsigned char i = 0; i<255; i++) {
       if((i >= 'a' && i <= 'z') || (i >= '1' || i <= '5')) continue;
-      eosio_assert( eosio::char_to_symbol(i) == 0, "eosio::char_to_symbol() != 0");
+      eosio_assert( eosio::char_to_symbol((char)i) == 0, "eosio::char_to_symbol() != 0");
    }
 }
 
@@ -88,13 +87,13 @@ void test_types::string_to_name() {
 
 void test_types::name_class() {
 
-   eosio_assert( eosio::name(eosio::string_to_name("azAA34")).value == N(azAA34), "eosio::name != N(azAA34)" );
-   eosio_assert( eosio::name(eosio::string_to_name("AABBCC")).value == 0, "eosio::name != N(0)" );
-   eosio_assert( eosio::name(eosio::string_to_name("AA11")).value == N(AA11), "eosio::name != N(AA11)" );
-   eosio_assert( eosio::name(eosio::string_to_name("11AA")).value == N(11), "eosio::name != N(11)" );
-   eosio_assert( eosio::name(eosio::string_to_name("22BBCCXXAA")).value == N(22), "eosio::name != N(22)" );
-   eosio_assert( eosio::name(eosio::string_to_name("AAAbbcccdd")) == eosio::name(eosio::string_to_name("AAAbbcccdd")), "eosio::name == eosio::name" );
+   eosio_assert( eosio::name{eosio::string_to_name("azAA34")}.value == N(azAA34), "eosio::name != N(azAA34)" );
+   eosio_assert( eosio::name{eosio::string_to_name("AABBCC")}.value == 0, "eosio::name != N(0)" );
+   eosio_assert( eosio::name{eosio::string_to_name("AA11")}.value == N(AA11), "eosio::name != N(AA11)" );
+   eosio_assert( eosio::name{eosio::string_to_name("11AA")}.value == N(11), "eosio::name != N(11)" );
+   eosio_assert( eosio::name{eosio::string_to_name("22BBCCXXAA")}.value == N(22), "eosio::name != N(22)" );
+   eosio_assert( eosio::name{eosio::string_to_name("AAAbbcccdd")} == eosio::name{eosio::string_to_name("AAAbbcccdd")}, "eosio::name == eosio::name" );
 
-   uint64_t tmp = eosio::name(eosio::string_to_name("11bbcccdd"));
+   uint64_t tmp = eosio::name{eosio::string_to_name("11bbcccdd")};
    eosio_assert(N(11bbcccdd) == tmp, "N(11bbcccdd) == tmp");
 }

@@ -1,4 +1,5 @@
 {
+  "version": "eosio::abi/1.0",
   "types": [{
       "new_type_name": "account_name",
       "type": "name"
@@ -25,7 +26,7 @@
         {"name":"type", "type":"string"},
         {"name":"data", "type":"uint8[]"},
         {"name":"memo", "type":"string"},
-        {"name":"confidence", "type":"uint8"},
+        {"name":"confidence", "type":"uint8"}
      ]
     },{
      "name": "certprop",
@@ -66,20 +67,22 @@
       "name": "accountrow",
       "base": "",
       "fields": [
-        {"name":"singleton_name", "type":"uint64"},
         {"name":"identity", "type":"uint64"}
       ]
     }
   ],
   "actions": [{
       "name": "create",
-      "type": "create"
+      "type": "create",
+      "ricardian_contract": ""
     },{
       "name": "certprop",
-      "type": "certprop"
+      "type": "certprop",
+      "ricardian_contract": ""
     },{
       "name": "settrust",
-      "type": "settrust"
+      "type": "settrust",
+      "ricardian_contract": ""
     }
   ],
   "tables": [{
@@ -109,5 +112,7 @@
       "key_names" : [ "account" ],
       "key_types": [ "account_name" ]
     }
-  ]
+  ],
+  "ricardian_clauses": [],
+  "abi_extensions": []
 }

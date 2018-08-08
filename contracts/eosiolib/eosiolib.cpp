@@ -1,17 +1,64 @@
+#include "datastream.hpp"
 #include "memory.hpp"
+#include "privileged.hpp"
+
+void* sbrk(size_t num_bytes) {
+      constexpr uint32_t NBPPL2  = 16U;
+      constexpr uint32_t NBBP    = 65536U;
+
+      static bool initialized;
+      static uint32_t sbrk_bytes;
+      if(!initialized) {
+         sbrk_bytes = __builtin_wasm_current_memory() * NBBP;
+         initialized = true;
+      }
+
+      if(num_bytes > INT32_MAX)
+         return reinterpret_cast<void*>(-1);
+
+      //uint32_t num_bytes = (uint32_t)num_bytesI;
+      const uint32_t prev_num_bytes = sbrk_bytes;
+      const uint32_t current_pages = __builtin_wasm_current_memory();
+
+      // round the absolute value of num_bytes to an alignment boundary
+      num_bytes = (num_bytes + 7U) & ~7U;
+
+      // update the number of bytes allocated, and compute the number of pages needed
+      const uint32_t num_desired_pages = (sbrk_bytes + num_bytes + NBBP - 1) >> NBPPL2;
+
+      if(num_desired_pages > current_pages) {
+         //unfortuately clang4 doesn't provide the return code of grow_memory, that's why need
+         //to go back around and double check current_memory to make sure it has actually grown!
+         __builtin_wasm_grow_memory(num_desired_pages - current_pages);
+         if(num_desired_pages != __builtin_wasm_current_memory())
+            return reinterpret_cast<void*>(-1);
+      }
+
+      sbrk_bytes += num_bytes;
+      return reinterpret_cast<void*>(prev_num_bytes);
+}
 
 namespace eosio {
+
+   void set_blockchain_parameters(const eosio::blockchain_parameters& params) {
+      char buf[sizeof(eosio::blockchain_parameters)];
+      eosio::datastream<char *> ds( buf, sizeof(buf) );
+      ds << params;
+      set_blockchain_parameters_packed( buf, ds.tellp() );
+   }
+
+   void get_blockchain_parameters(eosio::blockchain_parameters& params) {
+      char buf[sizeof(eosio::blockchain_parameters)];
+      size_t size = get_blockchain_parameters_packed( buf, sizeof(buf) );
+      eosio_assert( size <= sizeof(buf), "buffer is too small" );
+      eosio::datastream<const char*> ds( buf, size_t(size) );
+      ds >> params;
+   }
 
    using ::memset;
    using ::memcpy;
 
-  /**
-   *  @defgroup memorycppapi Memory C++ API
-   *  @brief Defines common memory functions
-   *  @ingroup memoryapi
-   *
-   *  @{
-   */
+
 
    class memory_manager  // NOTE: Should never allocate another instance of memory_manager
    {
@@ -34,12 +81,22 @@ namespace eosio {
 
       memory* next_active_heap()
       {
+         constexpr uint32_t wasm_page_size = 64*1024;
          memory* const current_memory = _available_heaps + _active_heap;
 
-         // make sure we will not exceed the 1M limit (needs to match wasm_interface.cpp _max_memory)
-         auto remaining = 1024 * 1024 - reinterpret_cast<int32_t>(sbrk(0));
-         if (remaining <= 0)
-         {
+         const uint32_t current_memory_size = reinterpret_cast<uint32_t>(sbrk(0));
+         if(static_cast<int32_t>(current_memory_size) < 0)
+            return nullptr;
+
+         //grab up to the end of the current WASM memory page provided that it has 1KiB remaining, otherwise
+         // grow to end of next page
+         uint32_t heap_adj;
+         if(current_memory_size % wasm_page_size <= wasm_page_size-1024)
+            heap_adj = (current_memory_size + wasm_page_size) - (current_memory_size % wasm_page_size) - current_memory_size;
+         else
+            heap_adj = (current_memory_size + wasm_page_size*2) - (current_memory_size % (wasm_page_size*2)) - current_memory_size;
+         char* new_memory_start = reinterpret_cast<char*>(sbrk(heap_adj));
+         if(reinterpret_cast<int32_t>(new_memory_start) == -1) {
             // ensure that any remaining unallocated memory gets cleaned up
             current_memory->cleanup_remaining();
             ++_active_heap;
@@ -47,10 +104,8 @@ namespace eosio {
             return nullptr;
          }
 
-         const uint32_t new_heap_size = uint32_t(remaining) > _new_heap_size ? _new_heap_size : uint32_t(remaining);
-         char* new_memory_start = static_cast<char*>(sbrk(new_heap_size));
          // if we can expand the current memory, keep working with it
-         if (current_memory->expand_memory(new_memory_start, new_heap_size))
+         if (current_memory->expand_memory(new_memory_start, heap_adj))
             return current_memory;
 
          // ensure that any remaining unallocated memory gets cleaned up
@@ -58,7 +113,7 @@ namespace eosio {
 
          ++_active_heap;
          memory* const next = _available_heaps + _active_heap;
-         next->init(new_memory_start, new_heap_size);
+         next->init(new_memory_start, heap_adj);
 
          return next;
       }
@@ -202,7 +257,6 @@ namespace eosio {
          {
             _heap_size = size;
             _heap = mem_heap;
-            memset(_heap, 0, _heap_size);
          }
 
          uint32_t is_init() const
@@ -281,7 +335,7 @@ namespace eosio {
                return nullptr;
             }
 
-            if( *orig_ptr_size > size ) 
+            if( *orig_ptr_size > size )
             {
                // use a buffer_ptr to allocate the memory to free
                char* const new_ptr = ptr + size + _size_marker;
@@ -461,7 +515,6 @@ namespace eosio {
       static const uint32_t _mem_block = 8;
       static const uint32_t _rem_mem_block_mask = _mem_block - 1;
       static const uint32_t _initial_heap_size = 8192;//32768;
-      static const uint32_t _new_heap_size = 65536;
       // if sbrk is not called outside of this file, then this is the max times we can call it
       static const uint32_t _heaps_size = 16;
       char _initial_heap[_initial_heap_size];
@@ -473,7 +526,8 @@ namespace eosio {
    };
 
    memory_manager memory_heap;
-}
+
+} /// namespace eosio
 
 extern "C" {
 

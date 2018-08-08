@@ -136,7 +136,6 @@
 #include <stdexcept>
 */
 //include <eosiolib/eos.hpp>
-#include <eosiolib/token.hpp>
 #include <eosiolib/dispatcher.hpp>
 
 using namespace eosio;
@@ -156,18 +155,9 @@ namespace stltest {
          prints("~MSTR");
       }
    };
-
-   /*
-   std::string s = "abcdef";
-   eosio::string s2 = "abcdef";;
-   MSTR global;
-   */
-
+    
     class contract {
     public:
-        typedef eosio::token<N(mycurrency),S(4,MYCUR)> token_type;
-        static const uint64_t code                = token_type::code;
-        static const uint64_t symbol              = token_type::symbol;
         static const uint64_t sent_table_name = N(sent);
         static const uint64_t received_table_name = N(received);
 
@@ -176,7 +166,7 @@ namespace stltest {
             account_name to;
            //string msg;
 
-            static uint64_t get_account() { return current_receiver(); }
+            static uint64_t get_account() { return N(stltest); }
             static uint64_t get_name()  { return N(message); }
 
             template<typename DataStream>
@@ -272,7 +262,8 @@ namespace stltest {
 
 extern "C" {
 /// The apply method implements the dispatch of events to this contract
-void apply( uint64_t code, uint64_t action ) {
+void apply( uint64_t receiver, uint64_t code, uint64_t action ) {
+    (void)receiver;
     stltest::contract::apply( code, action );
 }
 }

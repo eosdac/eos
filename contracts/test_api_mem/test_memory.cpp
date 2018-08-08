@@ -2,10 +2,9 @@
  *  @file
  *  @copyright defined in eos/LICENSE.txt
  */
-//#include <eoslib/message.h>
+
 #include <eosiolib/memory.hpp>
 
-using namespace eosio;
 
 void verify_mem(const void* const ptr, const uint32_t val, const uint32_t size)
 {
@@ -175,7 +174,7 @@ void test_memory::test_memory_hunks_disjoint()
       loop_ptr1[i] = (char*)malloc(64 * 1024 - 28);
       eosio_assert(loop_ptr1[i] != nullptr, "should have allocated a 64K char buf");
 
-      eosio_assert(sbrk(4) != nullptr, "should be able to allocate 8 bytes");
+      eosio_assert(reinterpret_cast<int32_t>(sbrk(4)) != -1, "should be able to allocate 8 bytes");
    }
 
    // the 15th extra heap is reduced in size because of the 14 * 8 bytes allocated by sbrk calls
@@ -310,4 +309,88 @@ void test_memory::test_memcmp()
    char buf6[] = "abcde";
    int32_t res3 = memcmp(buf5, buf6, 6);
    eosio_assert(res3 > 0, "first data should be larger than second data");
+}
+
+void test_memory::test_outofbound_0()
+{
+    memset((char *)0, 0xff, 1024 * 1024 * 1024); // big memory
+}
+
+void test_memory::test_outofbound_1()
+{
+    memset((char *)16, 0xff, 0xffffffff); // memory wrap around
+}
+
+void test_memory::test_outofbound_2()
+{
+    char buf[1024] = {0};
+    char *ptr = (char *)malloc(1048576);
+    memcpy(buf, ptr, 1048576); // stack memory out of bound
+}
+
+void test_memory::test_outofbound_3()
+{
+    char *ptr = (char *)malloc(128);
+    memset(ptr, 0xcc, 1048576); // heap memory out of bound
+}
+
+template <typename T>
+void test_memory_store() {
+    T *ptr = (T *)(8192 * 1024 - 1);
+    ptr[0] = (T)1;
+}
+
+template <typename T>
+void test_memory_load() {
+    T *ptr = (T *)(8192 * 1024 - 1);
+    volatile T tmp = ptr[0];
+    (void)tmp;
+}
+
+void test_memory::test_outofbound_4()
+{
+    test_memory_store<char>();
+}
+void test_memory::test_outofbound_5()
+{
+    test_memory_store<short>();
+}
+void test_memory::test_outofbound_6()
+{
+    test_memory_store<int>();
+}
+void test_memory::test_outofbound_7()
+{
+    test_memory_store<double>();
+}
+void test_memory::test_outofbound_8()
+{
+    test_memory_load<char>();
+}
+void test_memory::test_outofbound_9()
+{
+    test_memory_load<short>();
+}
+void test_memory::test_outofbound_10()
+{
+    test_memory_load<int>();
+}
+void test_memory::test_outofbound_11()
+{
+    test_memory_load<double>();
+}
+
+void test_memory::test_outofbound_12()
+{
+    volatile unsigned int a = 0xffffffff;
+    double *ptr = (double *)a; // store with memory wrap
+    ptr[0] = 1;
+}
+
+void test_memory::test_outofbound_13()
+{
+    volatile unsigned int a = 0xffffffff;
+    double *ptr = (double *)a; // load with memory wrap
+    volatile double tmp = ptr[0];
+    (void)tmp;
 }

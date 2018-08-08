@@ -9,1050 +9,932 @@
 extern "C" {
 /**
  *  @defgroup database Database API
- *  @brief APIs that store and retreive data on the blockchain
+ *  @brief Defines APIs that store and retrieve data on the blockchain
  *  @ingroup contractdev
  *
- *  EOS.IO organizes data according to the following broad structure:
+ *  @defgroup databasecpp Database C++ API
+ *  @brief Defines an interface to EOSIO database
+ *  @ingroup database
  *
- *  - **scope** - an account where the data is stored
- *     - **code** - the account name which has write permission 
+ *  @details
+ *  EOSIO organizes data according to the following broad structure:
+ *  - **code** - the account name which has write permission
+ *     - **scope** - an area where the data is stored
  *        - **table** - a name for the table that is being stored
  *           - **record** - a row in the table
- *
- *  Every transaction specifies the set of valid scopes that may be read and/or written
- *  to. The code that is running determines what can be written to; therefore, write operations
- *  do not allow you to specify/configure the code. 
- *
- *  @note Attempts to read and/or write outside the valid scope and/or code sections will 
- *  cause your transaction to fail.
- *
- *
- *  @section tabletypes table Types
- *  There are several supported table types identified by the number and
- *  size of the index.  
- *
- *  1. @ref dbi64 
- *  2. @ref dbi128i128
- *
- *  The database APIs assume that the first bytes of each record represent
- *  the primary and/or secondary keys followed by an arbitrary amount of data.
- *
- *  The @ref databaseCpp provides a simple interface for storing any fixed-size struct as
- *  a database row.
- *
  */
 
 /**
- *  @defgroup databaseC Database C API
- *  @brief C APIs for interfacing with the database.
+ *  @defgroup databasec Database C API
+ *  @brief Defines %C APIs for interfacing with the database.
  *  @ingroup database
- */
-
-/**
- * @defgroup dbi64  Single 64 bit Index table
- * @brief These methods interface with a simple table with 64 bit unique primary key and arbitrary binary data value.
- * @ingroup databaseC
  *
- * @see table class in C++ API
+ *  @details Database C API provides low level interface to EOSIO database.
  *
- * Example
- * @code
- * #pragma pack(push, 1)
- * struct test_model {
- *    account_name   name;
- *    unsigned char age;
- *    uint64_t      phone;
- * };
- *
- * test_model alice{ N(alice), 20, 4234622};
- * test_model bob  { N(bob),   15, 11932435};
- * test_model carol{ N(carol), 30, 545342453};
- * test_model dave { N(dave),  46, 6535354};
- *
- * int32_t res = store_i64(CurrentCode(),  N(test_table), &dave,  sizeof(test_model));
- * res = store_i64(CurrentCode(), N(test_table), &carol, sizeof(test_model));
- * res = store_i64(CurrentCode(), N(test_table), &bob, sizeof(test_model));
- * res = store_i64(CurrentCOde(), N(test_table), &alice, sizeof(test_model));
- * test_model alice;
- * alice.name = N(alice);
- * res = load_i64( current_receiver(), current_receiver(), N(test_table), &alice, sizeof(test_model) );
- * ASSERT(res == sizeof(test_model) && tmp.name == N(alice) && tmp.age == 20 && tmp.phone == 4234622, "load_i64");
- *
- * res = front_i64( current_receiver(), current_receiver(), N(test_table), &tmp, sizeof(test_model) );
- * ASSERT(res == sizeof(test_model) && tmp.name == N(alice) && tmp.age == 20 && tmp.phone == 4234622, "front_i64 1");
- *
- * res = back_i64( current_receiver(), current_receiver(), N(test_table), &tmp, sizeof(test_model) );
- * ASSERT(res == sizeof(test_model) && tmp.name == N(dave) && tmp.age == 46 && tmp.phone == 6535354, "back_i64 2");
- *
- * res = previous_i64( current_receiver(), current_receiver(), N(test_table), &tmp, sizeof(test_model) );
- * ASSERT(res == sizeof(test_model) && tmp.name == N(carol) && tmp.age == 30 && tmp.phone == 545342453, "carol previous");
- *
- * res = next_i64( current_receiver(), current_receiver(), N(test_table), &tmp, sizeof(test_model) );
- * ASSERT(res == sizeof(test_model) && tmp.name == N(dave) && tmp.age == 46 && tmp.phone == 6535354, "back_i64 2");
- *
- * uint64_t key = N(alice);
- * res = remove_i64(current_receiver(), N(test_table), &key);
- * ASSERT(res == 1, "remove alice");
- *
- * test_model lb;
- * lb.name = N(bob);
- * res = lower_bound_i64( current_receiver(), current_receiver(), N(test_table), &lb, sizeof(test_model) );
- * ASSERT(res == sizeof(test_model) && lb.name == N(bob), "lower_bound_i64 bob" );
- *
- * test_model ub;
- * ub.name = N(alice);
- * res = upper_bound_i64( current_receiver(), current_receiver(), N(test_table), &ub, sizeof(test_model) );
- * ASSERT(res == sizeof(test_model) && ub.age == 15 && ub.name == N(bob), "upper_bound_i64 bob" );
- * @endcode
- * @{
- */
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the ID/name of the table within the current scope/code context to modify
- *
- * @return 1 if a new record was created, 0 if an existing record was updated
- *
- * @pre datalen >= sizeof(uint64_t)
- * @pre data is a valid pointer to a range of memory at least datalen bytes long
- * @pre *((uint64_t*)data) stores the primary key
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post a record is either created or updated with the given scope and table.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t store_i64( account_name scope, table_name table, account_name bta, const void* data, uint32_t datalen );
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the ID/name of the table within the current scope/code context to modify
- *
- * @return 1 if the record was updated, 0 if no record with key was found
- *
- * @pre datalen >= sizeof(uint64_t)
- * @pre data is a valid pointer to a range of memory at least datalen bytes long
- * @pre *((uint64_t*)data) stores the primary key
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post a record is either created or updated with the given scope and table.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t update_i64( account_name scope, table_name table, account_name bta, const void* data, uint32_t datalen );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the stored record, should be initialized with the key to get
- *  @param datalen - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if key was not found
- */
-int32_t load_i64( account_name code, account_name scope, table_name table, void* data, uint32_t datalen );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the front record
- *  @param datalen - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t front_i64( account_name code, account_name scope, table_name table, void* data, uint32_t datalen );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the back record
- *  @param datalen - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t back_i64( account_name code, account_name scope, table_name table, void* data, uint32_t datalen );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the next record. Should be initialized with the key to get next record.
- *  @param datalen - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if key was not found
- */
-int32_t next_i64( account_name code, account_name scope, table_name table, void* data, uint32_t datalen );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the previous record. Should be initialized with the key to get previous record.
- *  @param datalen - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if key was not found
- */
-int32_t previous_i64( account_name code, account_name scope, table_name table, void* data, uint32_t datalen );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the lower bound. Should be initialized with the key to find lower bound of.
- *  @param datalen - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if key was not found
- */
-int32_t lower_bound_i64( account_name code, account_name scope, table_name table, void* data, uint32_t datalen );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the upper bound. Should be initialized with the key to find upper bound of.
- *  @param datalen - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if key was not found
- */
-int32_t upper_bound_i64( account_name code, account_name scope, table_name table, void* data, uint32_t datalen );
-
-/**
- *  @param scope - the account socpe that will be read, must exist in the transaction scopes list
- *  @param table - the ID/name of the table withing the scope/code context to query
- *  @param data - must point to at lest 8 bytes containing primary key
- *
- *  @return 1 if a record was removed, and 0 if no record with key was found
- */
-int32_t remove_i64( account_name scope, table_name table, void* data );
-
-///@} db_i64
-
-/**
- * @defgroup dbstr  Single String Index table
- * @brief These methods interface with a simple table with String unique primary key and arbitrary binary data value.
- * @ingroup databaseC
- *
- * @see table class in C++ API
- *
- * @{
- */
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the ID/name of the table within the current scope/code context to modify
- *
- * @return 1 if a new record was created, 0 if an existing record was updated
- *
- * @pre keylen >= 0
- * @pre key is a valid pointer to a range of memory at least keylen bytes long
- * @pre the memory range [key...key+len) stores the primary key
- * @pre valuelen >= 0
- * @pre value is a valid pointer to a range of memory at least valuelen bytes long
- * @pre the memory range [value...value+valuelen) stores the arbitrary binary data value
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post a record is either created or updated with the given scope and table.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t store_str( account_name scope, table_name table, account_name bta, char* key, uint32_t keylen, char* value, uint32_t valuelen );
- 
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the ID/name of the table within the current scope/code context to modify
- *
- * @return 1 if the record was updated, 0 if no record with key was found
- *
- * @pre keylen >= 0
- * @pre key is a valid pointer to a range of memory at least keylen bytes long
- * @pre the memory range [key...key+len) stores the primary key
- * @pre valuelen >= 0
- * @pre value is a valid pointer to a range of memory at least valuelen bytes long
- * @pre the memory range [value...value+valuelen) stores the arbitrary binary data value
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post a record is either created or updated with the given scope and table.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t update_str( account_name scope, table_name table, account_name bta, char* key, uint32_t keylen, char* value, uint32_t valuelen );
- 
- /**
-  *  @param scope - the account scope that will be read, must exist in the transaction scopes list
-  *  @param code  - identifies the code that controls write-access to the data
-  *  @param table - the ID/name of the table within the scope/code context to query
-  *  @param key  - location of the record key
-  *  @param keylen - length of the record key
-  *  @param value  - location to copy the record value
-  *  @param valuelen - maximum length of the record value to read 
-  *
-  *  @return the number of bytes read or -1 if key was not found
-  */
- int32_t load_str( account_name code, account_name scope, table_name table, char* key, uint32_t keylen, char* value, uint32_t valuelen );
-
- /**
-  *  @param scope - the account scope that will be read, must exist in the transaction scopes list
-  *  @param code  - identifies the code that controls write-access to the data
-  *  @param table - the ID/name of the table within the scope/code context to query
-  *  @param value  - location to copy the front record value
-  *  @param valuelen - maximum length of the record value to read 
-  *  @return the number of bytes read or -1 if key was not found
-  */
- int32_t front_str( account_name code, account_name scope, table_name table, char* value, uint32_t valuelen );
-
- /**
-  *  @param scope - the account scope that will be read, must exist in the transaction scopes list
-  *  @param code  - identifies the code that controls write-access to the data
-  *  @param table - the ID/name of the table within the scope/code context to query
-  *  @param value  - location to copy the back record value
-  *  @param valuelen - maximum length of the record value to read 
-  *  @return the number of bytes read or -1 if key was not found
-  */
- int32_t back_str( account_name code, account_name scope, table_name table, char* value, uint32_t valuelen );
-
- /**
-  *  @param scope - the account scope that will be read, must exist in the transaction scopes list
-  *  @param code  - identifies the code that controls write-access to the data
-  *  @param table - the ID/name of the table within the scope/code context to query
-  *  @param key  - location of the record key
-  *  @param keylen - length of the record key
-  *  @param value  - location to copy the next record value
-  *  @param valuelen - maximum length of the record value to read 
-  *  @return the number of bytes read or -1 if key was not found
-  */
- int32_t next_str( account_name code, account_name scope, table_name table, char* key, uint32_t keylen, char* value, uint32_t valuelen );
-
- /**
-  *  @param scope - the account scope that will be read, must exist in the transaction scopes list
-  *  @param code  - identifies the code that controls write-access to the data
-  *  @param table - the ID/name of the table within the scope/code context to query
-  *  @param key  - location of the record key
-  *  @param keylen - length of the record key
-  *  @param value  - location to copy the previous record value
-  *  @param valuelen - maximum length of the record value to read 
-  *  @return the number of bytes read or -1 if key was not found
-  */
- int32_t previous_str( account_name code, account_name scope, table_name table, char* key, uint32_t keylen, char* value, uint32_t valuelen );
-
- /**
-  *  @param scope - the account scope that will be read, must exist in the transaction scopes list
-  *  @param code  - identifies the code that controls write-access to the data
-  *  @param table - the ID/name of the table within the scope/code context to query
-  *  @param key  - location of the record key
-  *  @param keylen - length of the record key
-  *  @param value  - location to copy the lower bound record value
-  *  @param valuelen - maximum length of the record value to read
-  *  @return the number of bytes read or -1 if key was not found
-  */
- int32_t lower_bound_str( account_name code, account_name scope, table_name table, char* key, uint32_t keylen, char* value, uint32_t valuelen );
-
- /**
-  *  @param scope - the account scope that will be read, must exist in the transaction scopes list
-  *  @param code  - identifies the code that controls write-access to the data
-  *  @param table - the ID/name of the table within the scope/code context to query
-  *  @param key  - location of the record key
-  *  @param keylen - length of the record key
-  *  @param value  - location to copy the upper bound record value
-  *  @param valuelen - maximum length of the record value to read
-  *  @return the number of bytes read or -1 if key was not found
-  */
- int32_t upper_bound_str( account_name code, account_name scope, table_name table, char* key, uint32_t keylen, char* value, uint32_t valuelen );
- 
- /**
-  *  @param key  - location of the record key
-  *  @param keylen - length of the record key
-  *
-  *  @return 1 if a record was removed, and 0 if no record with key was found
-  */
- int32_t remove_str( account_name scope, table_name table, char* key, uint32_t keylen );
- 
- ///@} dbstr
-
-/**
- *  @defgroup dbi128i128  Dual 128 bit Index table
- *  @brief Interface to a database table with 128 bit primary and secondary keys and arbitary binary data value.
- *  @ingroup databaseC 
- *
- *  @param scope - the account where table data will be found
- *  @param code  - the code which owns the table
- *  @param table - the name of the table where record is stored
- *  @param data  - a pointer to memory that is at least 32 bytes long 
- *  @param len   - the length of data, must be greater than or equal to 32 bytes
- *
- *  @return the total number of bytes read or -1 for "not found" or "end" where bytes 
- *  read includes 32 bytes of the key  
- *
- *  These methods assume a database table with records of the form:
- *
- *  ```
- *     struct record {
- *        uint128  primary;
- *        uint128  secondary;
- *        ... arbitrary data ...
- *     };
- *
- *  ```
- *
- *  You can iterate over these indicies with primary index sorting records by { primary, secondary } and
- *  the secondary index sorting records by { secondary, primary }.  This means that duplicates of the primary or
- *  secondary values are allowed so long as there are no duplicates of the combination {primary, secondary}.
- *
- *  @see table class in C++ API
- *
- *  Example
- *  @code
- *  struct test_model128x2 {
- *     uint128_t number;
- *     uint128_t price;
- *     uint64_t  extra;
- *     uint64_t  table_name;
- *  };
- *
- *  test_model128x2 alice{0, 500, N(alice), N(table_name)};
- *  test_model128x2 bob{1, 1000, N(bob), N(table_name)};
- *  test_model128x2 carol{2, 1500, N(carol), N(table_name)};
- *  test_model128x2 dave{3, 2000, N(dave), N(table_name)};
- *  int32_t res = store_i128i128(CurrentCode(), N(table_name), &alice, sizeof(test_model128x2));
- *  res = store_i128i128(CurrentCode(), N(table_name), &bob, sizeof(test_model128x2));
- *  ASSERT(res == 1, "db store failed");
- *  res = store_i128i128(CurrentCode(), N(table_name), &carol, sizeof(test_model128x2));
- *  ASSERT(res == 1, "db store failed");
- *  res = store_i128i128(CurrentCode(), N(table_name), &dave, sizeof(test_model128x2));
- *  ASSERT(res == 1, "db store failed");
- *
- *  test_model128x2 query;
- *  query.number = 0;
- *  res = load_primary_i128i128(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model128x2));
- *  ASSERT(res == sizeof(test_model128x2) && query.number == 0 && query.price == 500 && query.extra == N(alice), "load");
- *
- *  res = front_primary_i128i128(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model128x2));
- *  ASSERT(res == sizeof(test_model128x2) && query.number == 3 && query.price = 2000 && query.extra == N(dave), "front");
- *
- *  res = next_primary_i128i128(CurrentCode(), CurrentCode(), N(table_name), & query, sizeof(test_model128x2));
- *  ASSERT(res == sizeof(test_model128x2) && query.number == 2 && query.price == 1500 && query.extra == N(carol), "next");
- *
- *  res = back_primary_i128i128(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model128x2));
- *  ASSERT(res == sizeof(test_model128x2) && query.number == 0 && query.price == 500 && query.extra == N(alice), "back");
- *
- *  res = previous_primary_i128i128(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model128x2));
- *  ASSERT(res == sizeof(test_model128x2) && query.number == 1 && query.price == 1000 && query.extra == N(bob), "previous");
- *
- *  query.number = 0;
- *  res = lower_bound_primary_i128i128(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model128x2));
- *  ASSERT(res == sizeof(test_model128x2) && query.number == 0 && query.price == 500 && query.extra == N(alice), "lower");
- *
- *  res = upper_bound_primary_i128i128(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model128x2));
- *  ASSERT(res == sizeof(test_model128x2) && query.number == 1 && query.price == 1000 && query.extra == N(bob), "upper");
- *
- * query.extra = N(bobby);
- * res = update_i128128(CurrentCode(), N(table_name), &query, sizeof(test_model128x2));
- * ASSERT(res == sizeof(test_model128x2) && query.number == 1 & query.price == 1000 && query.extra == N(bobby), "update");
- *
- * res = remove_i128128(CurrentCode(), N(table_name), &query, sizeof(test_model128x2));
- * ASSERT(res == 1, "remove")
- *  @endcode
- *
+ *  @section tabletypes Supported Table Types
+ *  Following are the table types supported by the C API:
+ *  1. Primary Table
+ *    - 64-bit integer key
+ *  2. Secondary Index Table
+ *    - 64-bit integer key
+ *    - 128-bit integer key
+ *    - 256-bit integer key
+ *    - double key
+ *    - long double key
  *  @{
  */
 
 /**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param code - the code which owns the table
- * @param table - the ID/name of the table within the current scope/code context to modify
- * @param data - location to copy the record, must be initialized with the primary key to load
- * @param len - length of record to copy
- * @return the number of bytes read, -1 if key was not found
- *
- * @pre len >= sizeof(uint128_t)
- * @pre data is a valid pointer to a range of memory at least datalen bytes long
- * @pre *((uint128_t*)data) stores the primary key
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post data will be initialized with the len bytes of record matching the key.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t load_primary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the front record of primary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t front_primary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the back record of primary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t back_primary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the next record of primary key; must be initialized with a key.
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t next_primary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the previous record of primary key; must be initialized with a key.
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t previous_primary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the upper bound of a primary key; must be initialized with a key.
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t upper_bound_primary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the lower bound of a primary key; must be initialized with a key.
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t lower_bound_primary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param code - the code which owns the table
- * @param table - the ID/name of the table within the current scope/code context to modify
- * @param data - location to copy the record, must be initialized with the secondary key to load
- * @param len - length of record to copy
- * @return the number of bytes read, -1 if key was not found
- *
- * @pre len >= sizeof(uint128_t)
- * @pre data is a valid pointer to a range of memory at least datalen bytes long
- * @pre *((uint128_t*)data) stores the secondary key
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post data will be initialized with the len bytes of record matching the key.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t load_secondary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the front record of secondary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t front_secondary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the back record of secondary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t back_secondary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the next record of secondary key; must be initialized with a key.
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t next_secondary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the previous record of secondary key; must be initialized with a key.
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t previous_secondary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the upper bound of given secondary key; must be initialized with a key.
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t upper_bound_secondary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the lower bound of given secondary key; must be initialized with a key.
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t lower_bound_secondary_i128i128( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the ID/name of the table within the scope/code context to query
- * @param data - must point to at lest 32 bytes containing {primary,secondary}
- *
- * @return 1 if a record was removed, and 0 if no record with key was found
- */
-int32_t remove_i128i128( account_name scope, table_name table, const void* data );
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the ID/name of the table within the scope/code context to query
- * @param data - must point to a at least 32 bytes containing (primary, secondary)
- * @param len - the length of the data
- * @return 1 if a new record was created, 0 if an existing record was updated
- */
-int32_t store_i128i128( account_name scope, table_name table, account_name bta, const void* data, uint32_t len );
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the ID/name of the table within the scope/code context to query
- * @param data - must to a at least 32 bytes containing (primary, secondary)
- * @param len - the length of the data
- * @return 1 if the record was updated, 0 if no record with key was found
- */
-int32_t update_i128i128( account_name scope, table_name table, account_name bta, const void* data, uint32_t len );
-
-///@}  dbi128i128
-
-/**
- *  @defgroup dbi64i64i64 Triple 64 bit Index table
- *  @brief Interface to a database table with 64 bit primary, secondary and tertiary keys and arbitrary binary data value.
- *  @ingroup databaseC 
- *
- *  @param scope - the account where table data will be found
- *  @param code  - the code which owns the table
- *  @param table - the name of the table where record is stored
- *  @param data  - a pointer to memory that is at least 32 bytes long 
- *  @param len   - the length of data, must be greater than or equal to 32 bytes
- *
- *  @return the total number of bytes read or -1 for "not found" or "end" where bytes 
- *  read includes 24 bytes of the key  
- *
- *  These methods assume a database table with records of the form:
- *
- *  ```
- *     struct record {
- *        uint64  primary;
- *        uint64  secondary;
- *        uint64  tertiary;
- *        ... arbitrary data ...
- *     };
- *
- *  ```
- *
- *  You can iterate over these indices with primary index sorting records by { primary, secondary, tertiary },
- *  the secondary index sorting records by { secondary, tertiary } and the tertiary index sorting records by
- *  { tertiary }.
- *
- *  @see table class in C++ API
- *
- *  Example
- *  @code
- *  struct test_model3xi64 {
- *         uint64_t a;
- *         uint64_t b;
- *         uint64_t c;
- *         uint64_t name;
- *  };
- *
- *  test_model3xi64 alice{ 0, 0, 0, N(alice) };
- *  test_model3xi64 bob{ 1, 1, 1, N(bob) };
- *  test_model3xi64 carol{ 2, 2, 2, N(carol) };
- *  test_model3xi64 dave{ 3, 3, 3, N(dave) };
- *
- *  int32_t res = store_i64i64i64(CurrentCode(), N(table_name), &alice, sizeof(test_model3xi64));
- *  res = store_i64i64i64(CurrentCode(), N(table_name), &bob, sizeof(test_model3xi64));
- *  res = store_i64i64i64(CurrentCode(), N(table_name), &carol, sizeof(test_model3xi64));
- *  res = store_i64i64i64(CurrentCode(), N(table_name), &dave, sizeof(test_model3xi64));
- *
- *  test_model3xi64 query;
- *  query.a = 0;
- *  res = load_primary_i64i64i64(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model3xi64));
- *  ASSERT(res == sizeof(test_model3xi64) && query.name == N(alice), "load");
- *
- *  res = front_primary_i64i64i64(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model3xi64));
- *  ASSERT(res == sizeof(test_model3xi64) && query.name == N(dave), "front");
- *
- *  res = back_primary_i64i64i64(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model3xi64));
- *  ASSERT(res == sizeof(test_model3xi64) && query.name == N(alice), "back");
- *
- *  res = previous_primary_i64i64i64(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model3xi64));
- *  ASSERT(res == sizeof(test_model3xi64) && query.name == N(bob), "previous");
- *
- *  res = next_primary_i64i64i64(CurrentCode(), CurrentCode(), N(table_name), &query, sizeof(test_model3xi64));
- *  ASSERT(res == sizeof(test_model3xi64) && query.name == N(alice), "next");*
- *
- *  @endcode
- *  @{
- */
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param code - the code which owns the table
- * @param table - the ID/name of the table within the current scope/code context to modify
- * @param data - location to copy the record, must be initialized with the (primary,secondary,tertiary) to load
- * @param len - length of record to copy
- * @return the number of bytes read, -1 if key was not found
- *
- * @pre data is a valid pointer to a range of memory at least len bytes long
- * @pre *((uint64_t*)data) stores the primary key
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post data will be initialized with the len bytes of record matching the key.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t load_primary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the front record of primary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t front_primary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the back record of primary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t back_primary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the next record of primary key; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t next_primary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the previous record of primary key; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t previous_primary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the upper bound of a primary key; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t upper_bound_primary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the lower bound of primary key; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t lower_bound_primary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param code - the code which owns the table
- * @param table - the ID/name of the table within the current scope/code context to modify
- * @param data - location to copy the record, must be initialized with the (secondary,tertiary) to load
- * @param len - length of record to copy
- * @return the number of bytes read, -1 if key was not found
- *
-  * @pre data is a valid pointer to a range of memory at least len bytes long
- * @pre *((uint64_t*)data) stores the secondary key
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post data will be initialized with the len bytes of record matching the key.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t load_secondary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the front record of a secondary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t front_secondary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the back record of secondary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t back_secondary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the next record; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t next_secondary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the previous record; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t previous_secondary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the upper bound of tertiary key; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t upper_bound_secondary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the lower bound of secondary key; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t lower_bound_secondary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param code - the code which owns the table
- * @param table - the ID/name of the table within the current scope/code context to modify
- * @param data - location to copy the record, must be initialized with the (tertiary) to load
- * @param len - length of record to copy
- * @return the number of bytes read, -1 if key was not found
- *
- * @pre data is a valid pointer to a range of memory at least len bytes long
- * @pre *((uint64_t*)data) stores the tertiary key
- * @pre scope is declared by the current transaction
- * @pre this method is being called from an apply context (not validate or precondition)
- *
- * @post data will be initialized with the len bytes of record matching the key.
- *
- * @throw if called with an invalid precondition execution will be aborted
- *
- */
-int32_t load_tertiary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the front record of a tertiary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t front_tertiary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the back record of a tertiary key
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t back_tertiary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the next record; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t next_tertiary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the previous record; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t previous_tertiary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the upper bound of tertiary key; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t upper_bound_tertiary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- *  @param scope - the account scope that will be read, must exist in the transaction scopes list
- *  @param code  - identifies the code that controls write-access to the data
- *  @param table - the ID/name of the table within the scope/code context to query
- *  @param data  - location to copy the lower bound of tertiary key; must be initialized with a key value
- *  @param len - the maximum length of data to read, must be greater than sizeof(uint64_t)
- *
- *  @return the number of bytes read or -1 if no record found
- */
-int32_t lower_bound_tertiary_i64i64i64( account_name code, account_name scope, table_name table, void* data, uint32_t len );
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the name of table where record is stored
- * @param data - must point to at least 24 bytes containing {primary,secondary,tertiary}
- *
- * @return 1 if a record was removed, and 0 if no record with key was found
- */
-int32_t remove_i64i64i64( account_name scope, table_name table, const void* data );
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the name of table where record is stored
- * @param data - must point to at least 24 bytes containing (primary,secondary,tertiary)
- * @param len - length of the data
- * @return 1 if a new record was created, 0 if an existing record was updated
- */
-int32_t store_i64i64i64( account_name scope, table_name table, account_name bta, const void* data, uint32_t len );
-
-/**
- * @param scope - the account scope that will be read, must exist in the transaction scopes list
- * @param table - the name of table where record is stored
- * @param data - must point to at least 24 bytes containing (primary,secondary,tertiary)
- * @param len - length of the data
- * @return 1 if the record was updated, 0 if no record with key was found
- */
-int32_t update_i64i64i64( account_name scope, table_name table, account_name bta, const void* data, uint32_t len );
-///@}  dbi64i64i64 
-
+  *
+  *  Store a record in a primary 64-bit integer index table
+  *
+  *  @brief Store a record in a primary 64-bit integer index table
+  *  @param scope - The scope where the table resides (implied to be within the code of the current receiver)
+  *  @param table - The table name
+  *  @param payer - The account that pays for the storage costs
+  *  @param id - ID of the entry
+  *  @param data - Record to store
+  *  @param len - Size of data
+  *  @pre `data` is a valid pointer to a range of memory at least `len` bytes long
+  *  @pre `*((uint64_t*)data)` stores the primary key
+  *  @return iterator to the newly created table row
+  *  @post a new entry is created in the table
+  */
 int32_t db_store_i64(account_name scope, table_name table, account_name payer, uint64_t id,  const void* data, uint32_t len);
-void db_update_i64(int32_t iterator, account_name payer, const void* data, uint32_t len);
-void db_remove_i64(int32_t iterator);
-int32_t db_get_i64(int32_t iterator, const void* data, uint32_t len);
-int32_t db_next_i64(int32_t iterator, uint64_t* primary);
-int32_t db_previous_i64(int32_t iterator, uint64_t* primary);
-int32_t db_find_i64(account_name code, account_name scope, table_name table, uint64_t id);
-int32_t db_lowerbound_i64( account_name code, account_name scope, table_name table, uint64_t id);
-int32_t db_upperbound_i64( account_name code, account_name scope, table_name table, uint64_t id);
 
+/**
+  *
+  *  Update a record in a primary 64-bit integer index table
+  *
+  *  @brief Update a record in a primary 64-bit integer index table
+  *  @param iterator - Iterator to the table row containing the record to update
+  *  @param payer - The account that pays for the storage costs (use 0 to continue using current payer)
+  *  @param data - New updated record
+  *  @param len - Size of data
+  *  @pre `data` is a valid pointer to a range of memory at least `len` bytes long
+  *  @pre `*((uint64_t*)data)` stores the primary key
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the record contained in the table row pointed to by `iterator` is replaced with the new updated record
+  */
+void db_update_i64(int32_t iterator, account_name payer, const void* data, uint32_t len);
+
+/**
+  *
+  *  Remove a record from a primary 64-bit integer index table
+  *
+  *  @brief Remove a record from a primary 64-bit integer index table
+  *  @param iterator - Iterator to the table row to remove
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the table row pointed to by `iterator` is removed and the associated storage costs are refunded to the payer
+  *
+  *  Example:
+  *
+  *  @code
+  *  int32_t itr = db_find_i64(receiver, receiver, table1, N(alice));
+  *  eosio_assert(itr >= 0, "Alice cannot be removed since she was already not found in the table");
+  *  db_remove_i64(itr);
+  *  @endcode
+  */
+void db_remove_i64(int32_t iterator);
+
+/**
+  *
+  *  Get a record in a primary 64-bit integer index table
+  *
+  *  @brief Get a record in a primary 64-bit integer index table
+  *  @param iterator - The iterator to the table row containing the record to retrieve
+  *  @param data - Pointer to the buffer which will be filled with the retrieved record
+  *  @param len - Size of the buffer
+  *  @return size of the data copied into the buffer if `len > 0`, or size of the retrieved record if `len == 0`.
+  *  @pre `iterator` points to an existing table row in the table
+  *  @pre `data` is a valid pointer to a range of memory at least `len` bytes long
+  *  @post `data` will be filled with the retrieved record (truncated to the first `len` bytes if necessary)
+  *
+  *  Example:
+  *
+  *  @code
+  *  char value[50];
+  *  auto len = db_get_i64(itr, value, 0);
+  *  eosio_assert(len <= 50, "buffer to small to store retrieved record");
+  *  db_get_i64(itr, value, len);
+  *  @endcode
+  */
+int32_t db_get_i64(int32_t iterator, const void* data, uint32_t len);
+
+/**
+  *
+  *  Find the table row following the referenced table row in a primary 64-bit integer index table
+  *
+  *  @brief Find the table row following the referenced table row in a primary 64-bit integer index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the next table row
+  *  @return iterator to the table row following the referenced table row (or the end iterator of the table if the referenced table row is the last one in the table)
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post `*primary` will be replaced with the primary key of the table row following the referenced table row if it exists, otherwise `*primary` will be left untouched
+  *
+  *  Example:
+  *
+  *  @code
+  *  int32_t charlie_itr = db_find_i64(receiver, receiver, table1, N(charlie));
+  *  // expect nothing after charlie
+  *  uint64_t prim = 0
+  *  int32_t  end_itr = db_next_i64(charlie_itr, &prim);
+  *  eosio_assert(end_itr < -1, "Charlie was not the last entry in the table");
+  *  @endcode
+  */
+int32_t db_next_i64(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row preceding the referenced table row in a primary 64-bit integer index table
+  *
+  *  @brief Find the table row preceding the referenced table row in a primary 64-bit integer index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the previous table row
+  *  @return iterator to the table row preceding the referenced table row assuming one exists (it will return -1 if the referenced table row is the first one in the table)
+  *  @pre `iterator` points to an existing table row in the table or it is the end iterator of the table
+  *  @post `*primary` will be replaced with the primary key of the table row preceding the referenced table row if it exists, otherwise `*primary` will be left untouched
+  *
+  *  Example:
+  *
+  *  @code
+  *  uint64_t prim = 0;
+  *  int32_t  itr_prev = db_previous_i64(itr, &prim);
+  *  @endcode
+  */
+int32_t db_previous_i64(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find a table row in a primary 64-bit integer index table by primary key
+  *
+  *  @brief Find a table row in a primary 64-bit integer index table by primary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param id - The primary key of the table row to look up
+  *  @return iterator to the table row with a primary key equal to `id` or the end iterator of the table if the table row could not be found
+  *
+  *  Example:
+  *
+  *  @code
+  *  int itr = db_find_i64(receiver, receiver, table1, N(charlie));
+  *  @endcode
+  */
+int32_t db_find_i64(account_name code, account_name scope, table_name table, uint64_t id);
+
+/**
+  *
+  *  Find the table row in a primary 64-bit integer index table that matches the lowerbound condition for a given primary key
+  *  The table row that matches the lowerbound condition is the first table row in the table with the lowest primary key that is >= the given key
+  *
+  *  @brief Find the table row in a primary 64-bit integer index table that matches the lowerbound condition for a given primary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param id - The primary key used to determine the lowerbound
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
+int32_t db_lowerbound_i64(account_name code, account_name scope, table_name table, uint64_t id);
+
+/**
+  *
+  *  Find the table row in a primary 64-bit integer index table that matches the upperbound condition for a given primary key
+  *  The table row that matches the upperbound condition is the first table row in the table with the lowest primary key that is > the given key
+  *
+  *  @brief Find the table row in a primary 64-bit integer index table that matches the upperbound condition for a given primary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param id - The primary key used to determine the upperbound
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
+int32_t db_upperbound_i64(account_name code, account_name scope, table_name table, uint64_t id);
+
+/**
+  *
+  *  Get an iterator representing just-past-the-end of the last table row of a primary 64-bit integer index table
+  *
+  *  @brief Get an iterator representing just-past-the-end of the last table row of a primary 64-bit integer index table
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @return end iterator of the table
+  */
+int32_t db_end_i64(account_name code, account_name scope, table_name table);
+
+/**
+  *
+  *  Store an association of a 64-bit integer secondary key to a primary key in a secondary 64-bit integer index table
+  *
+  *  @brief Store an association of a 64-bit integer secondary key to a primary key in a secondary 64-bit integer index table
+  *  @param scope - The scope where the table resides (implied to be within the code of the current receiver)
+  *  @param table - The table name
+  *  @param payer - The account that pays for the storage costs
+  *  @param id - The primary key to which to associate the secondary key
+  *  @param secondary - Pointer to the secondary key
+  *  @return iterator to the newly created table row
+  *  @post new secondary key association between primary key `id` and secondary key `*secondary` is created in the secondary 64-bit integer index table
+  */
 int32_t db_idx64_store(account_name scope, table_name table, account_name payer, uint64_t id, const uint64_t* secondary);
+
+/**
+  *
+  *  Update an association for a 64-bit integer secondary key to a primary key in a secondary 64-bit integer index table
+  *
+  *  @brief Update an association for a 64-bit integer secondary key to a primary key in a secondary 64-bit integer index table
+  *  @param iterator - The iterator to the table row containing the secondary key association to update
+  *  @param payer - The account that pays for the storage costs (use 0 to continue using current payer)
+  *  @param secondary - Pointer to the **new** secondary key that will replace the existing one of the association
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the secondary key of the table row pointed to by `iterator` is replaced by `*secondary`
+  */
 void db_idx64_update(int32_t iterator, account_name payer, const uint64_t* secondary);
+
+/**
+  *
+  *  Remove a table row from a secondary 64-bit integer index table
+  *
+  *  @brief Remove a table row from a secondary 64-bit integer index table
+  *  @param iterator - Iterator to the table row to remove
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the table row pointed to by `iterator` is removed and the associated storage costs are refunded to the payer
+  */
 void db_idx64_remove(int32_t iterator);
+
+/**
+  *
+  *  Find the table row following the referenced table row in a secondary 64-bit integer index table
+  *
+  *  @brief Find the table row following the referenced table row in a secondary 64-bit integer index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the next table row
+  *  @return iterator to the table row following the referenced table row (or the end iterator of the table if the referenced table row is the last one in the table)
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post `*primary` will be replaced with the primary key of the table row following the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
 int32_t db_idx64_next(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row preceding the referenced table row in a secondary 64-bit integer index table
+  *
+  *  @brief Find the table row preceding the referenced table row in a secondary 64-bit integer index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the previous table row
+  *  @return iterator to the table row preceding the referenced table row assuming one exists (it will return -1 if the referenced table row is the first one in the table)
+  *  @pre `iterator` points to an existing table row in the table or it is the end iterator of the table
+  *  @post `*primary` will be replaced with the primary key of the table row preceding the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
 int32_t db_idx64_previous(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find a table row in a secondary 64-bit integer index table by primary key
+  *
+  *  @brief Find a table row in a secondary 64-bit integer index table by primary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to a `uint64_t` variable which will have its value set to the secondary key of the found table row
+  *  @param primary - The primary key of the table row to look up
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @return iterator to the table row with a primary key equal to `id` or the end iterator of the table if the table row could not be found
+  */
 int32_t db_idx64_find_primary(account_name code, account_name scope, table_name table, uint64_t* secondary, uint64_t primary);
+
+/**
+  *
+  *  Find a table row in a secondary 64-bit integer index table by secondary key
+  *
+  *  @brief Find a table row in a secondary 64-bit integer index table by secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key used to lookup the table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the first table row with a secondary key equal to `*secondary` or the end iterator of the table if the table row could not be found
+  */
 int32_t db_idx64_find_secondary(account_name code, account_name scope, table_name table, const uint64_t* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary 64-bit integer index table that matches the lowerbound condition for a given secondary key
+  *  The table row that matches the lowerbound condition is the first table row in the table with the lowest secondary key that is >= the given key
+  *
+  *  @brief Find the table row in a secondary 64-bit integer index table that matches the lowerbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key first used to determine the lowerbound and which is then replaced with the secondary key of the found table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
 int32_t db_idx64_lowerbound(account_name code, account_name scope, table_name table, uint64_t* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary 64-bit integer index table that matches the upperbound condition for a given secondary key
+  *  The table row that matches the upperbound condition is the first table row in the table with the lowest secondary key that is > the given key
+  *
+  *  @brief Find the table row in a secondary 64-bit integer index table that matches the upperbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key first used to determine the upperbound and which is then replaced with the secondary key of the found table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
 int32_t db_idx64_upperbound(account_name code, account_name scope, table_name table, uint64_t* secondary, uint64_t* primary);
 
+/**
+  *
+  *  Get an end iterator representing just-past-the-end of the last table row of a secondary 64-bit integer index table
+  *
+  *  @brief Get an end iterator representing just-past-the-end of the last table row of a secondary 64-bit integer index table
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @return end iterator of the table
+  */
+int32_t db_idx64_end(account_name code, account_name scope, table_name table);
+
+
+
+/**
+  *
+  *  Store an association of a 128-bit integer secondary key to a primary key in a secondary 128-bit integer index table
+  *
+  *  @brief Store an association of a 128-bit integer secondary key to a primary key in a secondary 128-bit integer index table
+  *  @param scope - The scope where the table resides (implied to be within the code of the current receiver)
+  *  @param table - The table name
+  *  @param payer - The account that pays for the storage costs
+  *  @param id - The primary key to which to associate the secondary key
+  *  @param secondary - Pointer to the secondary key
+  *  @return iterator to the newly created table row
+  *  @post new secondary key association between primary key `id` and secondary key `*secondary` is created in the secondary 128-bit integer index table
+  */
 int32_t db_idx128_store(account_name scope, table_name table, account_name payer, uint64_t id, const uint128_t* secondary);
+
+/**
+  *
+  *  Update an association for a 128-bit integer secondary key to a primary key in a secondary 128-bit integer index table
+  *
+  *  @brief Update an association for a 128-bit integer secondary key to a primary key in a secondary 128-bit integer index table
+  *  @param iterator - The iterator to the table row containing the secondary key association to update
+  *  @param payer - The account that pays for the storage costs (use 0 to continue using current payer)
+  *  @param secondary - Pointer to the **new** secondary key that will replace the existing one of the association
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the secondary key of the table row pointed to by `iterator` is replaced by `*secondary`
+  */
 void db_idx128_update(int32_t iterator, account_name payer, const uint128_t* secondary);
+
+/**
+  *
+  *  Remove a table row from a secondary 128-bit integer index table
+  *
+  *  @brief Remove a table row from a secondary 128-bit integer index table
+  *  @param iterator - Iterator to the table row to remove
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the table row pointed to by `iterator` is removed and the associated storage costs are refunded to the payer
+  */
 void db_idx128_remove(int32_t iterator);
+
+/**
+  *
+  *  Find the table row following the referenced table row in a secondary 128-bit integer index table
+  *
+  *  @brief Find the table row following the referenced table row in a secondary 128-bit integer index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the next table row
+  *  @return iterator to the table row following the referenced table row (or the end iterator of the table if the referenced table row is the last one in the table)
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post `*primary` will be replaced with the primary key of the table row following the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
 int32_t db_idx128_next(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row preceding the referenced table row in a secondary 128-bit integer index table
+  *
+  *  @brief Find the table row preceding the referenced table row in a secondary 128-bit integer index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the previous table row
+  *  @return iterator to the table row preceding the referenced table row assuming one exists (it will return -1 if the referenced table row is the first one in the table)
+  *  @pre `iterator` points to an existing table row in the table or it is the end iterator of the table
+  *  @post `*primary` will be replaced with the primary key of the table row preceding the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
 int32_t db_idx128_previous(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find a table row in a secondary 128-bit integer index table by primary key
+  *
+  *  @brief Find a table row in a secondary 128-bit integer index table by primary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to a `uint128_t` variable which will have its value set to the secondary key of the found table row
+  *  @param primary - The primary key of the table row to look up
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @return iterator to the table row with a primary key equal to `id` or the end iterator of the table if the table row could not be found
+  */
 int32_t db_idx128_find_primary(account_name code, account_name scope, table_name table, uint128_t* secondary, uint64_t primary);
+
+/**
+  *
+  *  Find a table row in a secondary 128-bit integer index table by secondary key
+  *
+  *  @brief Find a table row in a secondary 128-bit integer index table by secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key used to lookup the table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the first table row with a secondary key equal to `*secondary` or the end iterator of the table if the table row could not be found
+  */
 int32_t db_idx128_find_secondary(account_name code, account_name scope, table_name table, const uint128_t* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary 128-bit integer index table that matches the lowerbound condition for a given secondary key
+  *  The table row that matches the lowerbound condition is the first table row in the table with the lowest secondary key that is >= the given key
+  *
+  *  @brief Find the table row in a secondary 128-bit integer index table that matches the lowerbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key first used to determine the lowerbound and which is then replaced with the secondary key of the found table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
 int32_t db_idx128_lowerbound(account_name code, account_name scope, table_name table, uint128_t* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary 128-bit integer index table that matches the upperbound condition for a given secondary key
+  *  The table row that matches the upperbound condition is the first table row in the table with the lowest secondary key that is > the given key
+  *
+  *  @brief Find the table row in a secondary 128-bit integer index table that matches the upperbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key first used to determine the upperbound and which is then replaced with the secondary key of the found table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
 int32_t db_idx128_upperbound(account_name code, account_name scope, table_name table, uint128_t* secondary, uint64_t* primary);
 
+/**
+  *
+  *  Get an end iterator representing just-past-the-end of the last table row of a secondary 128-bit integer index table
+  *
+  *  @brief Get an end iterator representing just-past-the-end of the last table row of a secondary 128-bit integer index table
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @return end iterator of the table
+  */
+int32_t db_idx128_end(account_name code, account_name scope, table_name table);
+
+/**
+  *
+  *  Store an association of a 256-bit secondary key to a primary key in a secondary 256-bit index table
+  *
+  *  @brief Store an association of a 256-bit secondary key to a primary key in a secondary 256-bit index table
+  *  @param scope - The scope where the table resides (implied to be within the code of the current receiver)
+  *  @param table - The table name
+  *  @param payer - The account that pays for the storage costs
+  *  @param id - The primary key to which to associate the secondary key
+  *  @param data - Pointer to the secondary key data stored as an array of 2 `uint128_t` integers
+  *  @param data_len - Must be set to 2
+  *  @return iterator to the newly created table row
+  *  @post new secondary key association between primary key `id` and the specified secondary key is created in the secondary 256-bit index table
+  */
+int32_t db_idx256_store(account_name scope, table_name table, account_name payer, uint64_t id, const uint128_t* data, uint32_t data_len );
+
+/**
+  *
+  *  Update an association for a 256-bit secondary key to a primary key in a secondary 256-bit index table
+  *
+  *  @brief Update an association for a 256-bit secondary key to a primary key in a secondary 256-bit index table
+  *  @param iterator - The iterator to the table row containing the secondary key association to update
+  *  @param payer - The account that pays for the storage costs (use 0 to continue using current payer)
+  *  @param data - Pointer to the **new** secondary key data (which is stored as an array of 2 `uint128_t` integers) that will replace the existing one of the association
+  *  @param data_len - Must be set to 2
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the secondary key of the table row pointed to by `iterator` is replaced by the specified secondary key
+  */
+void db_idx256_update(int32_t iterator, account_name payer, const uint128_t* data, uint32_t data_len);
+
+/**
+  *
+  *  Remove a table row from a secondary 256-bit index table
+  *
+  *  @brief Remove a table row from a secondary 256-bit index table
+  *  @param iterator - Iterator to the table row to remove
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the table row pointed to by `iterator` is removed and the associated storage costs are refunded to the payer
+  */
+void db_idx256_remove(int32_t iterator);
+
+/**
+  *
+  *  Find the table row following the referenced table row in a secondary 256-bit index table
+  *
+  *  @brief Find the table row following the referenced table row in a secondary 256-bit index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the next table row
+  *  @return iterator to the table row following the referenced table row (or the end iterator of the table if the referenced table row is the last one in the table)
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post `*primary` will be replaced with the primary key of the table row following the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
+int32_t db_idx256_next(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row preceding the referenced table row in a secondary 256-bit index table
+  *
+  *  @brief Find the table row preceding the referenced table row in a secondary 256-bit index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the previous table row
+  *  @return iterator to the table row preceding the referenced table row assuming one exists (it will return -1 if the referenced table row is the first one in the table)
+  *  @pre `iterator` points to an existing table row in the table or it is the end iterator of the table
+  *  @post `*primary` will be replaced with the primary key of the table row preceding the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
+int32_t db_idx256_previous(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find a table row in a secondary 256-bit index table by primary key
+  *
+  *  @brief Find a table row in a secondary 128-bit integer index table by primary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param data - Pointer to the an array of 2 `uint128_t` integers which will act as the buffer to hold the retrieved secondary key of the found table row
+  *  @param data_len - Must be set to 2
+  *  @param primary - The primary key of the table row to look up
+  *  @post If and only if the table row is found, the buffer pointed to by `data` will be filled with the secondary key of the found table row
+  *  @return iterator to the table row with a primary key equal to `id` or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx256_find_primary(account_name code, account_name scope, table_name table, uint128_t* data, uint32_t data_len, uint64_t primary);
+
+/**
+  *
+  *  Find a table row in a secondary 256-bit index table by secondary key
+  *
+  *  @brief Find a table row in a secondary 256-bit index table by secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param data - Pointer to the secondary key data (which is stored as an array of 2 `uint128_t` integers) used to lookup the table row
+  *  @param data_len - Must be set to 2
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the first table row with a secondary key equal to the specified secondary key or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx256_find_secondary(account_name code, account_name scope, table_name table, const uint128_t* data, uint32_t data_len, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary 256-bit index table that matches the lowerbound condition for a given secondary key
+  *  The table row that matches the lowerbound condition is the first table row in the table with the lowest secondary key that is >= the given key (uses lexicographical ordering on the 256-bit keys)
+  *
+  *  @brief Find the table row in a secondary 256-bit index table that matches the lowerbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param data - Pointer to the secondary key data (which is stored as an array of 2 `uint128_t` integers) first used to determine the lowerbound and which is then replaced with the secondary key of the found table row
+  *  @param data_len - Must be set to 2
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, the buffer pointed to by `data` will be filled with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx256_lowerbound(account_name code, account_name scope, table_name table, uint128_t* data, uint32_t data_len, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary 256-bit index table that matches the upperbound condition for a given secondary key
+  *  The table row that matches the upperbound condition is the first table row in the table with the lowest secondary key that is > the given key (uses lexicographical ordering on the 256-bit keys)
+  *
+  *  @brief Find the table row in a secondary 256-bit index table that matches the upperbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param data - Pointer to the secondary key data (which is stored as an array of 2 `uint128_t` integers) first used to determine the upperbound and which is then replaced with the secondary key of the found table row
+  *  @param data_len - Must be set to 2
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, the buffer pointed to by `data` will be filled with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx256_upperbound(account_name code, account_name scope, table_name table, uint128_t* data, uint32_t data_len, uint64_t* primary);
+
+/**
+  *
+  *  Get an end iterator representing just-past-the-end of the last table row of a secondary 256-bit index table
+  *
+  *  @brief Get an end iterator representing just-past-the-end of the last table row of a secondary 256-bit index table
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @return end iterator of the table
+  */
+int32_t db_idx256_end(account_name code, account_name scope, table_name table);
+
+/**
+  *
+  *  Store an association of a double-precision floating-point secondary key to a primary key in a secondary double-precision floating-point index table
+  *
+  *  @brief Store an association of a double-precision floating-point secondary key to a primary key in a secondary double-precision floating-point index table
+  *  @param scope - The scope where the table resides (implied to be within the code of the current receiver)
+  *  @param table - The table name
+  *  @param payer - The account that pays for the storage costs
+  *  @param id - The primary key to which to associate the secondary key
+  *  @param secondary - Pointer to the secondary key
+  *  @return iterator to the newly created table row
+  *  @post new secondary key association between primary key `id` and secondary key `*secondary` is created in the secondary double-precision floating-point index table
+  */
+int32_t db_idx_double_store(account_name scope, table_name table, account_name payer, uint64_t id, const double* secondary);
+
+/**
+  *
+  *  Update an association for a double-precision floating-point secondary key to a primary key in a secondary double-precision floating-point index table
+  *
+  *  @brief Update an association for a double-precision floating-point secondary key to a primary key in a secondary double-precision floating-point index table
+  *  @param iterator - The iterator to the table row containing the secondary key association to update
+  *  @param payer - The account that pays for the storage costs (use 0 to continue using current payer)
+  *  @param secondary - Pointer to the **new** secondary key that will replace the existing one of the association
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the secondary key of the table row pointed to by `iterator` is replaced by `*secondary`
+  */
+void db_idx_double_update(int32_t iterator, account_name payer, const double* secondary);
+
+/**
+  *
+  *  Remove a table row from a secondary double-precision floating-point index table
+  *
+  *  @brief Remove a table row from a secondary double-precision floating-point index table
+  *  @param iterator - Iterator to the table row to remove
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the table row pointed to by `iterator` is removed and the associated storage costs are refunded to the payer
+  */
+void db_idx_double_remove(int32_t iterator);
+
+/**
+  *
+  *  Find the table row following the referenced table row in a secondary double-precision floating-point index table
+  *
+  *  @brief Find the table row following the referenced table row in a secondary double-precision floating-point index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the next table row
+  *  @return iterator to the table row following the referenced table row (or the end iterator of the table if the referenced table row is the last one in the table)
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post `*primary` will be replaced with the primary key of the table row following the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
+int32_t db_idx_double_next(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row preceding the referenced table row in a secondary double-precision floating-point index table
+  *
+  *  @brief Find the table row preceding the referenced table row in a secondary double-precision floating-point index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the previous table row
+  *  @return iterator to the table row preceding the referenced table row assuming one exists (it will return -1 if the referenced table row is the first one in the table)
+  *  @pre `iterator` points to an existing table row in the table or it is the end iterator of the table
+  *  @post `*primary` will be replaced with the primary key of the table row preceding the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
+int32_t db_idx_double_previous(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find a table row in a secondary double-precision floating-point index table by primary key
+  *
+  *  @brief Find a table row in a secondary double-precision floating-point index table by primary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to a `double` variable which will have its value set to the secondary key of the found table row
+  *  @param primary - The primary key of the table row to look up
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @return iterator to the table row with a primary key equal to `id` or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx_double_find_primary(account_name code, account_name scope, table_name table, double* secondary, uint64_t primary);
+
+/**
+  *
+  *  Find a table row in a secondary double-precision floating-point index table by secondary key
+  *
+  *  @brief Find a table row in a secondary double-precision floating-point index table by secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key used to lookup the table row
+  *  @param primary - Pointer to a `double` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the first table row with a secondary key equal to `*secondary` or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx_double_find_secondary(account_name code, account_name scope, table_name table, const double* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary double-precision floating-point index table that matches the lowerbound condition for a given secondary key
+  *  The table row that matches the lowerbound condition is the first table row in the table with the lowest secondary key that is >= the given key
+  *
+  *  @brief Find the table row in a secondary double-precision floating-point index table that matches the lowerbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key first used to determine the lowerbound and which is then replaced with the secondary key of the found table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx_double_lowerbound(account_name code, account_name scope, table_name table, double* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary double-precision floating-point index table that matches the upperbound condition for a given secondary key
+  *  The table row that matches the upperbound condition is the first table row in the table with the lowest secondary key that is > the given key
+  *
+  *  @brief Find the table row in a secondary double-precision floating-point index table that matches the upperbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key first used to determine the upperbound and which is then replaced with the secondary key of the found table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx_double_upperbound(account_name code, account_name scope, table_name table, double* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Get an end iterator representing just-past-the-end of the last table row of a secondary double-precision floating-point index table
+  *
+  *  @brief Get an end iterator representing just-past-the-end of the last table row of a secondary double-precision floating-point index table
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @return end iterator of the table
+  */
+int32_t db_idx_double_end(account_name code, account_name scope, table_name table);
+
+/**
+  *
+  *  Store an association of a quadruple-precision floating-point secondary key to a primary key in a secondary quadruple-precision floating-point index table
+  *
+  *  @brief Store an association of a quadruple-precision floating-point secondary key to a primary key in a secondary quadruple-precision floating-point index table
+  *  @param scope - The scope where the table resides (implied to be within the code of the current receiver)
+  *  @param table - The table name
+  *  @param payer - The account that pays for the storage costs
+  *  @param id - The primary key to which to associate the secondary key
+  *  @param secondary - Pointer to the secondary key
+  *  @return iterator to the newly created table row
+  *  @post new secondary key association between primary key `id` and secondary key `*secondary` is created in the secondary quadruple-precision floating-point index table
+  */
+int32_t db_idx_long_double_store(account_name scope, table_name table, account_name payer, uint64_t id, const long double* secondary);
+
+/**
+  *
+  *  Update an association for a quadruple-precision floating-point secondary key to a primary key in a secondary quadruple-precision floating-point index table
+  *
+  *  @brief Update an association for a quadruple-precision floating-point secondary key to a primary key in a secondary quadruple-precision floating-point index table
+  *  @param iterator - The iterator to the table row containing the secondary key association to update
+  *  @param payer - The account that pays for the storage costs (use 0 to continue using current payer)
+  *  @param secondary - Pointer to the **new** secondary key that will replace the existing one of the association
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the secondary key of the table row pointed to by `iterator` is replaced by `*secondary`
+  */
+void db_idx_long_double_update(int32_t iterator, account_name payer, const long double* secondary);
+
+/**
+  *
+  *  Remove a table row from a secondary quadruple-precision floating-point index table
+  *
+  *  @brief Remove a table row from a secondary quadruple-precision floating-point index table
+  *  @param iterator - Iterator to the table row to remove
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post the table row pointed to by `iterator` is removed and the associated storage costs are refunded to the payer
+  */
+void db_idx_long_double_remove(int32_t iterator);
+
+/**
+  *
+  *  Find the table row following the referenced table row in a secondary quadruple-precision floating-point index table
+  *
+  *  @brief Find the table row following the referenced table row in a secondary quadruple-precision floating-point index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the next table row
+  *  @return iterator to the table row following the referenced table row (or the end iterator of the table if the referenced table row is the last one in the table)
+  *  @pre `iterator` points to an existing table row in the table
+  *  @post `*primary` will be replaced with the primary key of the table row following the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
+int32_t db_idx_long_double_next(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row preceding the referenced table row in a secondary quadruple-precision floating-point index table
+  *
+  *  @brief Find the table row preceding the referenced table row in a secondary quadruple-precision floating-point index table
+  *  @param iterator - The iterator to the referenced table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the previous table row
+  *  @return iterator to the table row preceding the referenced table row assuming one exists (it will return -1 if the referenced table row is the first one in the table)
+  *  @pre `iterator` points to an existing table row in the table or it is the end iterator of the table
+  *  @post `*primary` will be replaced with the primary key of the table row preceding the referenced table row if it exists, otherwise `*primary` will be left untouched
+  */
+int32_t db_idx_long_double_previous(int32_t iterator, uint64_t* primary);
+
+/**
+  *
+  *  Find a table row in a secondary quadruple-precision floating-point index table by primary key
+  *
+  *  @brief Find a table row in a secondary quadruple-precision floating-point index table by primary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to a `long double` variable which will have its value set to the secondary key of the found table row
+  *  @param primary - The primary key of the table row to look up
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @return iterator to the table row with a primary key equal to `id` or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx_long_double_find_primary(account_name code, account_name scope, table_name table, long double* secondary, uint64_t primary);
+
+/**
+  *
+  *  Find a table row in a secondary quadruple-precision floating-point index table by secondary key
+  *
+  *  @brief Find a table row in a secondary quadruple-precision floating-point index table by secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key used to lookup the table row
+  *  @param primary - Pointer to a `long double` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the first table row with a secondary key equal to `*secondary` or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx_long_double_find_secondary(account_name code, account_name scope, table_name table, const long double* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary quadruple-precision floating-point index table that matches the lowerbound condition for a given secondary key
+  *  The table row that matches the lowerbound condition is the first table row in the table with the lowest secondary key that is >= the given key
+  *
+  *  @brief Find the table row in a secondary quadruple-precision floating-point index table that matches the lowerbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key first used to determine the lowerbound and which is then replaced with the secondary key of the found table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx_long_double_lowerbound(account_name code, account_name scope, table_name table, long double* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Find the table row in a secondary quadruple-precision floating-point index table that matches the upperbound condition for a given secondary key
+  *  The table row that matches the upperbound condition is the first table row in the table with the lowest secondary key that is > the given key
+  *
+  *  @brief Find the table row in a secondary quadruple-precision floating-point index table that matches the upperbound condition for a given secondary key
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @param secondary - Pointer to secondary key first used to determine the upperbound and which is then replaced with the secondary key of the found table row
+  *  @param primary - Pointer to a `uint64_t` variable which will have its value set to the primary key of the found table row
+  *  @post If and only if the table row is found, `*secondary` will be replaced with the secondary key of the found table row
+  *  @post If and only if the table row is found, `*primary` will be replaced with the primary key of the found table row
+  *  @return iterator to the found table row or the end iterator of the table if the table row could not be found
+  */
+int32_t db_idx_long_double_upperbound(account_name code, account_name scope, table_name table, long double* secondary, uint64_t* primary);
+
+/**
+  *
+  *  Get an end iterator representing just-past-the-end of the last table row of a secondary quadruple-precision floating-point index table
+  *
+  *  @brief Get an end iterator representing just-past-the-end of the last table row of a secondary quadruple-precision floating-point index table
+  *  @param code - The name of the owner of the table
+  *  @param scope - The scope where the table resides
+  *  @param table - The table name
+  *  @return end iterator of the table
+  */
+int32_t db_idx_long_double_end(account_name code, account_name scope, table_name table);
+
+///@} databasec
 }
